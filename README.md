@@ -1,4 +1,36 @@
 data-streams
 ============
 
-Transform stream to convert datapackage resources located by an url
+Transforms the resources of a datapackage into streams
+
+[![NPM](https://nodei.co/npm/data-streams.png)](https://nodei.co/npm/data-streams/)
+
+
+Usage
+=====
+
+    var Dpkg = require('data-streams');
+    var myDataPackage = require('datapackage.json');
+
+    var dpkg = new Dpkg(myDataPackage);
+    var stream = dpkg.createReadStream(name, options);
+
+
+```name``` is the name of the resource, ```options```, an object with
+the following properties:
+
+- objectMode: (true/false) return a stream in objectMode.
+- coerce: (true/false) coerce the values according to the types specified in schema (implies objectMode)
+- ldjsonify: (true/false) JSON.stringify + '\n' (implies objectMode)
+
+
+Tests
+=====
+
+    npm test
+
+
+Licence
+=======
+
+MIT

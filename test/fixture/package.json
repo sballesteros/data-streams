@@ -1,0 +1,42 @@
+{
+  "name": "dpkg1",
+  "dataDependencies": {
+    "dpkg2": "*"
+  },
+
+  "resources": [
+    {
+      "name": "test",
+      "schema": {
+        "fields": [
+          {"name": "a", "type": "string"},
+          {"name": "b", "type": "string"},
+          {"name": "c", "type": "string"}
+        ]
+      },
+      "data": [
+        {"a": "a", "b": "a", "c": "z"},
+        {"a": "x", "b": "v", "c": "z"},
+        {"a": "y", "b": "v", "c": "z"}
+      ]
+    },
+    {
+      "name": "data",
+      "path": "data/data.csv",
+      "format": "csv",
+      "schema": {
+        "fields": [
+          {"name": "date", "type": "date"},
+          {"name": "a", "type": "number"},
+          {"name": "b", "type": "integer"},
+          {"name": "c", "type": "integer"},
+          {"name": "d", "type": "integer"}
+        ]
+      }
+    },
+    {
+      "name": "url",
+      "url": "https://raw.github.com/okfn/datapackage.js/master/tests/data/test.csv"
+    }    
+  ]
+}
