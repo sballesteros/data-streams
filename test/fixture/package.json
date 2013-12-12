@@ -1,12 +1,12 @@
 {
   "name": "dpkg1",
   "dataDependencies": {
-    "dpkg2": "*"
+    "mydpkg": "0.0.0"
   },
 
   "resources": [
     {
-      "name": "test",
+      "name": "test_inline",
       "schema": {
         "fields": [
           {"name": "a", "type": "string"},
@@ -21,7 +21,7 @@
       ]
     },
     {
-      "name": "data",
+      "name": "test_path",
       "path": "data/data.csv",
       "format": "csv",
       "schema": {
@@ -35,8 +35,16 @@
       }
     },
     {
-      "name": "url",
-      "url": "https://raw.github.com/okfn/datapackage.js/master/tests/data/test.csv"
-    }    
+      "name": "test_url",
+      "url": "https://raw.github.com/standard-analytics/data-streams/master/test/fixture/test.csv"
+    },
+    {
+      "name": "test_require",
+      "require": {"datapackage": "mydpkg", "resource": "csv1"}
+    },
+    {
+      "name": "test_require_filter",
+      "require": {"datapackage": "mydpkg", "resource": "csv1", "fields": ["a"]}
+    }
   ]
 }

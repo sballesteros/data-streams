@@ -14,7 +14,7 @@ describe('streams', function(){
   });
 
   it('should return a vanilla stream of a resource with a "data" property', function(done){
-    var s = dpkg.createReadStream('test');
+    var s = dpkg.createReadStream('test_inline');
     s.on('error', function(err){ throw err; });
     s.on('data', function(data){
       var expected = [
@@ -28,7 +28,7 @@ describe('streams', function(){
   });
 
   it('should return a vanilla stream of a resource with a "path" property', function(done){
-    var s = dpkg.createReadStream('data');
+    var s = dpkg.createReadStream('test_path');
     var data = [];
     s.on('error', function(err){ throw err; });
     s.on('data', function(chunk){
@@ -45,7 +45,7 @@ describe('streams', function(){
 
   it('should return a vanilla stream of a resource with an "url" property (as Buffer)', function(done){
     var body = [];
-    var s = dpkg.createReadStream('url');
+    var s = dpkg.createReadStream('test_url');
     s.on('error', function(err){ throw err; });
     s.on('data', function(chunk){
       body.push(chunk);
@@ -68,7 +68,7 @@ describe('streams', function(){
       {date: '2012-10-04', a: '3076.5', b: 'null', c: '4783', d: '148'}
     ];
 
-    var s = dpkg.createReadStream('data', {objectMode:true});
+    var s = dpkg.createReadStream('test_path', {objectMode:true});
     s.on('error', function(err){ throw err; });
 
     var counter = 0;
@@ -94,7 +94,7 @@ describe('streams', function(){
       {date: isoify('2012-10-04'), a: 3076.5, b: null, c: 4783, d: 148}
     ];
 
-    var s = dpkg.createReadStream('data', {coerce:true});
+    var s = dpkg.createReadStream('test_path', {coerce:true});
     s.on('error', function(err){ throw err; });
 
     var counter = 0;
@@ -119,7 +119,7 @@ describe('streams', function(){
       {date: '2012-10-04', a: '3076.5', b: 'null', c: '4783', d: '148'}
     ].map(function(x){return new Buffer(JSON.stringify(x) + '\n');});;
 
-    var s = dpkg.createReadStream('data', {ldjsonify:true});
+    var s = dpkg.createReadStream('test_path', {ldjsonify:true});
     s.on('error', function(err){ throw err; });
     var counter = 0;
     s.on('data', function(data){ 
@@ -127,6 +127,38 @@ describe('streams', function(){
     });
 
     s.on('end', done);
+  });
+
+  it('should work with require from registry.standardanalytics.io and coerce (so retrieve the schema first)', function(done){
+    var s = dpkg.createReadStream('test_require', {coerce: true});
+
+    var expected = [
+      {a: 1, b: 2},
+      {a: 3, b: 4}
+    ];
+
+    var counter = 0;
+    s.on('data', function(data){ 
+      assert.deepEqual(data, expected[counter++]); 
+    });
+    s.on('error', function(err){ throw err; });
+    s.on('end', done);
+  });
+
+  it('should work with require from registry.standardanalytics.io respecting the fields option of require', function(done){
+    var s = dpkg.createReadStream('test_require_filter', {coerce: true});
+    
+    var expected = [
+      {a: 1},
+      {a: 3}
+    ];
+
+    var counter = 0;
+    s.on('data', function(data){ 
+      assert.deepEqual(data, expected[counter++]); 
+    });
+    s.on('error', function(err){ throw err; });
+    s.on('end', done);    
   });
 
 });

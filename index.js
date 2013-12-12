@@ -56,12 +56,18 @@ Dpkg.prototype.createReadStream = function(name, options){
   
   //order matters
   if('data' in r){
-    s =  new Streamifier(r.data, options);
+    s =  new Streamifier(r.data, r.format, options);
+    if(!r.format && (typeof r.data !== 'string')){
+      r.format === 'json';
+    }
   } else if('url' in r){
     s = new PassThrough(options);
     isRemote = true;
   } else if('path' in r){
     s = fs.createReadStream(path.resolve(this.root, r.path));
+    if(!r.format){
+      r.format = path.extname(r.path).substring(1);
+    }
   } else if('require' in r){
     s = new PassThrough(options);
     isRemote = true;
@@ -72,11 +78,16 @@ Dpkg.prototype.createReadStream = function(name, options){
   if(isRemote){
     //return immediately the empty PassThrough stream that will be fed by data when the request is resolved
 
-    var feed = function (format, schema){
+    var feed = function (format, schema, fields){
       request(r.url || this._url(r.require))
         .on('response', function(resp){
           format = format || mime.extension(resp.headers['content-type']);
-          this._convert(resp, options, format, schema).pipe(s);
+          var c = this._convert(resp, options, format, schema);
+          if(options.objectMode && fields){
+            c = c.pipe(new Filter(fields, options));
+          }
+          c.pipe(s);
+
         }.bind(this))
         .on('error', function(err){
           s.emit('error', err);
@@ -85,11 +96,11 @@ Dpkg.prototype.createReadStream = function(name, options){
     
     if( ('require' in r) && !('url' in r) ){
       //on the registry, we get the resource without data to get a schema if it exists
-      request(this._url(r.require) + '?meta=true', function(err, body, resp){
+      request(this._url(r.require) + '?meta=true', function(err, resp, body){
         if(err) return s.emit('error', err);
         if(resp.statusCode === 200){
           body = JSON.parse(body);
-          feed(body.format, body.schema);
+          feed(body.format, body.schema, r.require.fields);
         }       
       }.bind(this));
     } else {
@@ -111,6 +122,12 @@ Dpkg.prototype._convert = function(s, options, format, schema){
     return s;
   }
 
+  //TODO check format...
+  if(!format){
+    s.emit('error', new Error('no format could be specified'));
+    return s;
+  }
+
   //Parsing: binary stream -> stream in objectMode
   if(format === 'csv'){
     s = s.pipe(binaryCSV({json:true}));
@@ -121,14 +138,20 @@ Dpkg.prototype._convert = function(s, options, format, schema){
         return JSON.parse(row);
       }
     }));
+  } else if (format === 'json') {
+    return s;
   }
-
+ 
   //coercion and transformation  
-  if(options.coerce && schema){
+  if(schema && options.coerce){
     s = s.pipe(new Validator(schema));
   }
-
+ 
   if(options.ldjsonify){
+    if(format !== 'csv'){
+      s.emit('error', new Error('ldjsonify can only be used with csv data'))
+      return s;
+    }
     s = s.pipe(new Ldjsonifier());
   }
 
