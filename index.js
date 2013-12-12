@@ -58,7 +58,7 @@ Dpkg.prototype.createReadStream = function(name, options){
   if('data' in r){
     s =  new Streamifier(r.data, r.format, options);
     if(!r.format && (typeof r.data !== 'string')){
-      r.format === 'json';
+      r.format = 'json';
     }
   } else if('url' in r){
     s = new PassThrough(options);
@@ -82,12 +82,11 @@ Dpkg.prototype.createReadStream = function(name, options){
       request(r.url || this._url(r.require))
         .on('response', function(resp){
           format = format || mime.extension(resp.headers['content-type']);
-          var c = this._convert(resp, options, format, schema);
-          if(options.objectMode && fields){
-            c = c.pipe(new Filter(fields, options));
-          }
-          c.pipe(s);
-
+          if(resp.statusCode === 200){
+            this._convert(resp, name,  options, format, schema, fields).pipe(s);
+          } else {
+            s.emit('error', new Error(resp.statusCode));          
+          }    
         }.bind(this))
         .on('error', function(err){
           s.emit('error', err);
@@ -101,30 +100,32 @@ Dpkg.prototype.createReadStream = function(name, options){
         if(resp.statusCode === 200){
           body = JSON.parse(body);
           feed(body.format, body.schema, r.require.fields);
-        }       
+        } else {
+          s.emit('error', new Error(resp.statusCode));          
+        }    
       }.bind(this));
     } else {
-      feed(r.schema);
+      feed(r.format, r.schema, r.fields);
     }
     return s;
 
   }else{
-    return this._convert(s, options, r.format, r.schema);
+    return this._convert(s, name, options, r.format, r.schema, r.fields);
   }
 };
 
 
 /**
- * s is a raw stream with a special properties format and schena attached to it
+ * s is a raw stream
  */  
-Dpkg.prototype._convert = function(s, options, format, schema){
+Dpkg.prototype._convert = function(s, name, options, format, schema, fields){
   if(!options.objectMode){
     return s;
   }
 
   //TODO check format...
   if(!format){
-    s.emit('error', new Error('no format could be specified'));
+    s.emit('error', new Error('no format could be specified for ' + name));
     return s;
   }
 
@@ -141,12 +142,16 @@ Dpkg.prototype._convert = function(s, options, format, schema){
   } else if (format === 'json') {
     return s;
   }
- 
+  
   //coercion and transformation  
   if(schema && options.coerce){
     s = s.pipe(new Validator(schema));
   }
- 
+
+  if(fields){
+    s = s.pipe(new Filter(fields, options));
+  }
+  
   if(options.ldjsonify){
     if(format !== 'csv'){
       s.emit('error', new Error('ldjsonify can only be used with csv data'))
@@ -157,4 +162,3 @@ Dpkg.prototype._convert = function(s, options, format, schema){
 
   return s;
 };
-
