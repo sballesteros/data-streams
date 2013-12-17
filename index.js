@@ -14,7 +14,16 @@ var fs = require('fs')
   , mime = require('mime')
   , split = require('split');
 
-module.exports = Dpkg;
+exports.Dpkg = Dpkg;
+exports.DpkgSync = DpkgSync;
+
+function DpkgSync(root, options){  
+  var dpkg = JSON.parse(fs.readFileSync(path.resolve(root, 'package.json')));
+
+  Dpkg.call(this, dpkg, root, options);  
+};
+util.inherits(DpkgSync, Dpkg);
+
 
 function Dpkg(dpkg, root, options){
   options = options || {};
@@ -24,16 +33,9 @@ function Dpkg(dpkg, root, options){
   this.registry = options.registry || 'http://registry.standardanalytics.io';
 };
 
+
 Dpkg.prototype.get = function(name){
   return this.dpkg.resources.filter(function(x){return x.name === name})[0];
-};
-
-Dpkg.prototype._fail = function(msg){
-  var s = new Readable(this.options);   
-  process.nextTick(function(){
-    stream.emit('error', new Error(msg));
-  });
-  return s;  
 };
 
 Dpkg.prototype._url = function(require){
@@ -47,7 +49,7 @@ Dpkg.prototype.createReadStream = function(name, options){
   }
 
   var r = this.get(name);
-  if(!r) return this._fail('resource '+ name + ' does not exist');
+  if(!r) return _fail('resource '+ name + ' does not exist');
 
   var s; //the stream we will return
 
@@ -72,7 +74,7 @@ Dpkg.prototype.createReadStream = function(name, options){
     s = new PassThrough(options);
     isRemote = true;
   } else {
-    return this._fail('could not find "data", "url", "path" or "require"');
+    return _fail('could not find "data", "url", "path" or "require"');
   }
 
   if(isRemote){
@@ -161,4 +163,14 @@ Dpkg.prototype._convert = function(s, name, options, format, schema, fields){
   }
 
   return s;
+};
+
+
+
+function _fail(msg){
+  var s = new Readable();   
+  process.nextTick(function(){
+    stream.emit('error', new Error(msg));
+  });
+  return s;  
 };

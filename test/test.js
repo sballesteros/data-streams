@@ -1,4 +1,5 @@
-var Dpkg = require('../')
+var Dpkg = require('../').Dpkg
+  , DpkgSync = require('../').DpkgSync
   , fs = require('fs')
   , path = require('path')
   , assert = require('assert');
@@ -10,7 +11,7 @@ describe('streams', function(){
   var dpkg;
   beforeEach(function(){
     var data = JSON.parse(fs.readFileSync(path.resolve(root, 'package.json')));
-    dpkg = new Dpkg(data, root);
+    dpkg = new Dpkg(data, root);   
   });
 
   it('should return a vanilla stream of a resource with a "data" property', function(done){
