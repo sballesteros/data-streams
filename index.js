@@ -58,7 +58,7 @@ Dpkg.prototype.createReadStream = function(name, options){
   
   //order matters
   if('data' in r){
-    s =  new Streamifier(r.data, r.format, options);
+    s =  new Streamifier(r.data);
     if(!r.format && (typeof r.data !== 'string')){
       r.format = 'json';
     }
@@ -78,85 +78,109 @@ Dpkg.prototype.createReadStream = function(name, options){
   }
 
   if(isRemote){
-    //return immediately the empty PassThrough stream that will be fed by data when the request is resolved
-
-    var feed = function (format, schema, fields){
-      request(r.url || this._url(r.require))
-        .on('response', function(resp){
-          format = format || mime.extension(resp.headers['content-type']);
-          if(resp.statusCode === 200){
-            this._convert(resp, name,  options, format, schema, fields).pipe(s);
-          } else {
-            s.emit('error', new Error(resp.statusCode));          
-          }    
-        }.bind(this))
-        .on('error', function(err){
-          s.emit('error', err);
-        });
-    }.bind(this);
+    //return immediately the empty PassThrough stream that will be fed by data when the request is resolved    
     
-    if( ('require' in r) && !('url' in r) ){
-      //on the registry, we get the resource without data to get a schema if it exists
+    //if not format or schema but a hope that's it's on the registry: try to get format or schema from the registry
+    if( ('require' in r) && ! ('url' in r) && ( !('format' in r) || !('schema' in r) ) ){ 
+
       request(this._url(r.require) + '?meta=true', function(err, resp, body){
         if(err) return s.emit('error', err);
         if(resp.statusCode === 200){
           body = JSON.parse(body);
-          feed(body.format, body.schema, r.require.fields);
-        } else {
-          s.emit('error', new Error(resp.statusCode));          
-        }    
+          if(!('format' in r) && ('format' in body)){
+            r.format = body.format;
+          }
+          if(!('schema' in r) && ('schema' in body)){
+            r.schema = body.schema;
+          }
+        }
+        this._feed(s, r, options);
       }.bind(this));
+
     } else {
-      feed(r.format, r.schema, r.fields);
+      this._feed(s, r, options);
     }
+
     return s;
 
   }else{
-    return this._convert(s, name, options, r.format, r.schema, r.fields);
+
+    return this._convert(s, r, options);
+
   }
 };
 
 
 /**
- * s is a raw stream
+ * feed passthrough stream s with remote resource r
+ */ 
+Dpkg.prototype._feed = function (s, r, options){
+  request(r.url || this._url(r.require))
+    .on('response', function(resp){
+      r.format = r.format || mime.extension(resp.headers['content-type']); //last hope to get a format
+      if(resp.statusCode === 200){
+        this._convert(resp, r, options).pipe(s);
+      } else {
+        s.emit('error', new Error(resp.statusCode));          
+      }    
+    }.bind(this))
+    .on('error', function(err){
+      s.emit('error', err);
+    });
+};
+
+
+
+/**
+ * convert s, a raw stream (Buffer) according to the format of r and
+ * options
  */  
-Dpkg.prototype._convert = function(s, name, options, format, schema, fields){
+Dpkg.prototype._convert = function(s, r, options){
+
   if(!options.objectMode){
     return s;
   }
 
-  //TODO check format...
-  if(!format){
-    s.emit('error', new Error('no format could be specified for ' + name));
+  if(!r.format){
+    process.nextTick(function(){
+      s.emit('error', new Error('no format could be found for ' + r.name));
+    });
     return s;
   }
 
+  if( (r.format !== 'csv') && (r.format !== 'ldjson') ){
+    process.nextTick(function(){
+      s.emit('error', new Error('options ' + Object.keys(options).join(',') +' can only be specified for resource of format csv or ldjson, not ' + r.format + ' ( resource: ' + r.name +')'));
+    });
+    return s;    
+  }
+
   //Parsing: binary stream -> stream in objectMode
-  if(format === 'csv'){
+  if(r.format === 'csv'){
     s = s.pipe(binaryCSV({json:true}));
 
-  } else if (format === 'ldjson'){ //line delimited JSON
+  } else if (r.format === 'ldjson'){ //line delimited JSON
     s = s.pipe(split(function(row){
       if(row) {
         return JSON.parse(row);
       }
     }));
-  } else if (format === 'json') {
-    return s;
   }
   
   //coercion and transformation  
-  if(schema && options.coerce){
-    s = s.pipe(new Validator(schema));
+  if(r.schema && options.coerce){
+    s = s.pipe(new Validator(r.schema));
   }
 
-  if(fields){
-    s = s.pipe(new Filter(fields, options));
+  if(r.require && r.require.fields){
+    s = s.pipe(new Filter(r.require.fields, options));
   }
   
   if(options.ldjsonify){
-    if(format !== 'csv'){
-      s.emit('error', new Error('ldjsonify can only be used with csv data'))
+    if(r.format !== 'csv'){
+      process.nextTick(function(){
+        s.emit('error', new Error('ldjsonify can only be used with csv data'))
+      });
       return s;
     }
     s = s.pipe(new Ldjsonifier());
@@ -164,7 +188,6 @@ Dpkg.prototype._convert = function(s, name, options, format, schema, fields){
 
   return s;
 };
-
 
 
 function _fail(msg){
