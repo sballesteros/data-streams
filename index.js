@@ -38,8 +38,25 @@ Dpkg.prototype.get = function(name){
   return this.dpkg.resources.filter(function(x){return x.name === name})[0];
 };
 
-Dpkg.prototype._url = function(require){
-  return [this.registry, require.datapackage, semver.clean(this.dpkg.dataDependencies[require.datapackage]), require.resource].join('/');
+
+Dpkg.prototype._url = function(require, callback){
+
+  request(this.registry + '/' + require.datapackage, function(err, res, versions){
+    if(err) return callback(err);
+    
+    if (res.statusCode >= 400){
+      var err = new Error('fail');
+      err.code = res.statusCode;
+      return callback(err);
+    }
+    
+    versions = JSON.parse(versions);
+    var version = semver.maxSatisfying(versions, this.dpkg.dataDependencies[require.datapackage]);
+    
+    callback(null, [this.registry, require.datapackage, version, require.resource].join('/'));
+    
+  }.bind(this));
+
 };
 
 Dpkg.prototype.createReadStream = function(name, options){
@@ -83,18 +100,22 @@ Dpkg.prototype.createReadStream = function(name, options){
     //if not format or schema but a hope that's it's on the registry: try to get format or schema from the registry
     if( ('require' in r) && ! ('url' in r) && ( !('format' in r) || !('schema' in r) ) ){ 
 
-      request(this._url(r.require) + '?meta=true', function(err, resp, body){
+      this._url(r.require, function(err, rurl){
         if(err) return s.emit('error', err);
-        if(resp.statusCode === 200){
-          body = JSON.parse(body);
-          if(!('format' in r) && ('format' in body)){
-            r.format = body.format;
+        request(rurl + '?meta=true', function(err, resp, body){
+          if(err) return s.emit('error', err);
+          if(resp.statusCode === 200){
+            body = JSON.parse(body);
+            if(!('format' in r) && ('format' in body)){
+              r.format = body.format;
+            }
+            if(!('schema' in r) && ('schema' in body)){
+              r.schema = body.schema;
+            }
           }
-          if(!('schema' in r) && ('schema' in body)){
-            r.schema = body.schema;
-          }
-        }
-        this._feed(s, r, options);
+          this._feed(s, r, options);
+        }.bind(this));
+
       }.bind(this));
 
     } else {
@@ -115,18 +136,32 @@ Dpkg.prototype.createReadStream = function(name, options){
  * feed passthrough stream s with remote resource r
  */ 
 Dpkg.prototype._feed = function (s, r, options){
-  request(r.url || this._url(r.require))
-    .on('response', function(resp){
-      r.format = r.format || mime.extension(resp.headers['content-type']); //last hope to get a format
-      if(resp.statusCode === 200){
-        this._convert(resp, r, options).pipe(s);
-      } else {
-        s.emit('error', new Error(resp.statusCode));          
-      }    
-    }.bind(this))
-    .on('error', function(err){
-      s.emit('error', err);
+  var that = this;
+
+  if(r.url){
+    next(r.url);
+  } else {
+    that._url(r.require, function(err, rurl){
+      if(err) return s.emit('error', err);
+      next(rurl);
     });
+  }
+  
+  function next(rurl){
+    request(rurl)
+      .on('response', function(resp){
+        r.format = r.format || mime.extension(resp.headers['content-type']); //last hope to get a format
+        if(resp.statusCode === 200){
+          that._convert(resp, r, options).pipe(s);
+        } else {
+          s.emit('error', new Error(resp.statusCode));          
+        }    
+      })
+      .on('error', function(err){
+        s.emit('error', err);
+      });
+  };
+
 };
 
 
