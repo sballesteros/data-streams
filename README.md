@@ -1,7 +1,7 @@
 data-streams
 ============
 
-Transforms the resources of a datapackage into streams
+Transforms the resources of a container.jsonld into streams.
 
 [![NPM](https://nodei.co/npm/data-streams.png)](https://nodei.co/npm/data-streams/)
 
@@ -9,14 +9,14 @@ Transforms the resources of a datapackage into streams
 Usage
 =====
 
-    var Dpkg = require('data-streams');
-    var myDataPackage = require('package.json');
+    var Ctnr = require('data-streams');
+    var myContainer = require('container.jsonld');
 
-    var dpkg = new Dpkg(myDataPackage, '.');
-    var stream = dpkg.createReadStream(name, options);
+    var ctnr = new Ctnr(myContainer, '.');
+    var stream = ctnr.createReadStream(name, options);
 
 
-```name``` is the name of the resource.
+```name``` is the name of the [Dataset](http://www.schema.org/Dataset) resource.
 
 For the resources in ```csv``` and ```ldjson``` format, an
 ```options``` object with the following properties can be specified:
