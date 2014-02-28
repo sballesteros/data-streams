@@ -1,5 +1,4 @@
-var Dpkg = require('../').Dpkg
-  , DpkgSync = require('../').DpkgSync
+var Ctnr = require('../').Ctnr
   , fs = require('fs')
   , path = require('path')
   , assert = require('assert');
@@ -8,14 +7,14 @@ describe('streams', function(){
 
   var root = path.resolve(__dirname, 'fixture'); 
 
-  var dpkg;
+  var ctnr;
   beforeEach(function(){
-    var data = JSON.parse(fs.readFileSync(path.resolve(root, 'package.json')));
-    dpkg = new Dpkg(data, root);   
+    var data = JSON.parse(fs.readFileSync(path.resolve(root, 'container.jsonld')));
+    ctnr = new Ctnr(data, root);   
   });
 
-  it('should return a vanilla stream of a resource with a "data" property', function(done){
-    var s = dpkg.createReadStream('test_inline');
+  it('should return a vanilla stream of a resource with a "contentData" property', function(done){
+    var s = ctnr.createReadStream('test_inline');
     s.on('error', function(err){ throw err; });
     s.on('data', function(data){
       var expected = [
@@ -28,8 +27,8 @@ describe('streams', function(){
     s.on('end', done);    
   });
 
-  it('should return a vanilla stream of a resource with a "path" property', function(done){
-    var s = dpkg.createReadStream('test_path');
+  it('should return a vanilla stream of a resource with a "contentPath" property', function(done){
+    var s = ctnr.createReadStream('test_path');
     var data = [];
     s.on('error', function(err){ throw err; });
     s.on('data', function(chunk){
@@ -44,9 +43,9 @@ describe('streams', function(){
     });
   });
 
-  it('should return a vanilla stream of a resource with an "url" property (as Buffer)', function(done){
+  it('should return a vanilla stream of a resource with a "contentUrl" property (as Buffer)', function(done){
     var body = [];
-    var s = dpkg.createReadStream('test_url');
+    var s = ctnr.createReadStream('test_url');
     s.on('error', function(err){ throw err; });
     s.on('data', function(chunk){
       body.push(chunk);
@@ -60,7 +59,7 @@ describe('streams', function(){
     });
   });
 
-  it('should stream an SDF resource in objectMode', function(done){
+  it('should stream a tabular resource in objectMode', function(done){
 
     var expected = [
       {date: '2012-08-02', a: '6.2',    b: '10',   c: '9',    d: '5'},
@@ -69,7 +68,7 @@ describe('streams', function(){
       {date: '2012-10-04', a: '3076.5', b: 'null', c: '4783', d: '148'}
     ];
 
-    var s = dpkg.createReadStream('test_path', {objectMode:true});
+    var s = ctnr.createReadStream('test_path', {objectMode:true});
     s.on('error', function(err){ throw err; });
 
     var counter = 0;
@@ -95,7 +94,7 @@ describe('streams', function(){
       {date: isoify('2012-10-04'), a: 3076.5, b: null, c: 4783, d: 148}
     ];
 
-    var s = dpkg.createReadStream('test_path', {coerce:true});
+    var s = ctnr.createReadStream('test_path', {coerce:true});
     s.on('error', function(err){ throw err; });
 
     var counter = 0;
@@ -110,6 +109,30 @@ describe('streams', function(){
     s.on('end', done);       
   });
 
+  it('should filter', function(done){
+    
+    var expected = [
+      {a: 6.2,    c: 9 },
+      {a: null,   c: null },
+      {a: 884.4,  c: 2355 },
+      {a: 3076.5, c: 4783 }
+    ];
+
+    var s = ctnr.createReadStream('test_path', {coerce:true, filter:['a', 'c']});
+    s.on('error', function(err){ throw err; });
+
+    var counter = 0;
+    s.on('data', function(obj){
+      for(var key in obj){
+        assert.strictEqual(obj[key], expected[counter][key]);          
+      }
+      counter++;
+    });
+
+    s.on('end', done);       
+
+  });
+
 
   it('should stream an SDF resource as line delimited json (as Buffer)', function(done){
 
@@ -120,7 +143,7 @@ describe('streams', function(){
       {date: '2012-10-04', a: '3076.5', b: 'null', c: '4783', d: '148'}
     ].map(function(x){return new Buffer(JSON.stringify(x) + '\n');});;
 
-    var s = dpkg.createReadStream('test_path', {ldjsonify:true});
+    var s = ctnr.createReadStream('test_path', {ldjsonify:true});
     s.on('error', function(err){ throw err; });
     var counter = 0;
     s.on('data', function(data){ 
@@ -128,38 +151,6 @@ describe('streams', function(){
     });
 
     s.on('end', done);
-  });
-
-  it('should work with require from registry.standardanalytics.io and coerce (so retrieve the schema first)', function(done){
-    var s = dpkg.createReadStream('test_require', {coerce: true});
-
-    var expected = [
-      {a: 1, b: 2},
-      {a: 3, b: 4}
-    ];
-
-    var counter = 0;
-    s.on('data', function(data){ 
-      assert.deepEqual(data, expected[counter++]); 
-    });
-    s.on('error', function(err){ throw err; });
-    s.on('end', done);
-  });
-
-  it('should work with require from registry.standardanalytics.io respecting the fields option of require', function(done){
-    var s = dpkg.createReadStream('test_require_filter', {coerce: true});
-    
-    var expected = [
-      {a: 1},
-      {a: 3}
-    ];
-
-    var counter = 0;
-    s.on('data', function(data){ 
-      assert.deepEqual(data, expected[counter++]); 
-    });
-    s.on('error', function(err){ throw err; });
-    s.on('end', done);    
   });
 
 });

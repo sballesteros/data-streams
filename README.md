@@ -24,7 +24,7 @@ For the resources in ```csv``` and ```ldjson``` format, an
 - objectMode: (true/false) return a stream in objectMode where every chunk will be a row (as a JS object).
 - coerce: (true/false) coerce the values according to the types specified in schema (implies objectMode)
 - ldjsonify: (true/false) JSON.stringify + '\n' (implies objectMode)
-
+- filter: an array of column to be kept (all the other will be filtered out)
 
 Tests
 =====

@@ -6,127 +6,130 @@ var fs = require('fs')
   , PassThrough = require('stream').PassThrough
   , binaryCSV = require("binary-csv")
   , Streamifier = require('./lib/util').Streamifier
-  , Ldjsonifier = require('./lib//util').Ldjsonifier
+  , Ldjsonifier = require('./lib/util').Ldjsonifier
   , Filter = require('./lib//util').Filter
   , request = require('request')
   , Validator = require('jts-validator')
   , semver = require('semver')
   , mime = require('mime')
+  , isUrl = require('is-url')
+  , url = require('url')
   , split = require('split');
 
-exports.Dpkg = Dpkg;
-exports.DpkgSync = DpkgSync;
+exports.Ctnr = Ctnr;
+exports.CtnrSync = CtnrSync;
 
-function DpkgSync(root, options){  
-  var dpkg = JSON.parse(fs.readFileSync(path.resolve(root, 'package.json')));
+function CtnrSync(root, opts){  
+  var ctnr = JSON.parse(fs.readFileSync(path.resolve(root, 'container.jsonld')));
 
-  Dpkg.call(this, dpkg, root, options);  
+  Ctnr.call(this, ctnr, root, opts);  
 };
-util.inherits(DpkgSync, Dpkg);
+util.inherits(CtnrSync, Ctnr);
 
 
-function Dpkg(dpkg, root, options){
-  options = options || {};
+function Ctnr(ctnr, root, opts){
+  opts = opts || {};
   
-  this.dpkg = dpkg;
+  this.ctnr = ctnr;
   this.root = (root) ? path.resolve(root): process.cwd();
-  this.registry = options.registry || 'http://registry.standardanalytics.io';
-};
 
-
-Dpkg.prototype.get = function(name){
-  return this.dpkg.resources.filter(function(x){return x.name === name})[0];
-};
-
-
-Dpkg.prototype._url = function(require, callback){
-
-  request(this.registry + '/' + require.datapackage, function(err, res, versions){
-    if(err) return callback(err);
-    
-    if (res.statusCode >= 400){
-      var err = new Error('fail');
-      err.code = res.statusCode;
-      return callback(err);
+  //if !base in this -> will throw if based is needed. if this.based === undefined try to get a base by dereferencing context url
+  if(ctnr['@context']){
+    if(isUrl(ctnr['@context'])){
+      this.base = undefined; //will be resolved at first request if needed...
+    } else if ( (typeof ctnr['@context'] === 'object') && ('@base' in ctnr['@context']) && isUrl(ctnr['@context']['@base']) ) {
+      this.base = ctnr['@context']['@base'];
     }
-    
-    versions = JSON.parse(versions);
-    var version = semver.maxSatisfying(versions, this.dpkg.dataDependencies[require.datapackage]);
-    
-    callback(null, [this.registry, require.datapackage, version, require.resource].join('/'));
-    
-  }.bind(this));
+  } else if(opts.base && isUrl(opts.base)) {
+    this.base = opts.base;
+  }
 
 };
 
-Dpkg.prototype.createReadStream = function(name, options){
-  options = clone(options) || {};
-  if(options.coerce || options.ldjsonify){
-    options.objectMode = true;
+
+Ctnr.prototype.get = function(name){
+  return clone(this.ctnr.dataset.filter(function(x){return x.name === name})[0]);
+};
+
+
+Ctnr.prototype.createReadStream = function(name, opts){
+  opts = clone(opts) || {};
+  if(opts.coerce || opts.ldjsonify){
+    opts.objectMode = true;
   }
 
   var r = this.get(name);
-  if(!r) return _fail('resource '+ name + ' does not exist');
-
-  var s; //the stream we will return
+  if(!r) return _fail('dataset ' + name + ' does not exist');
+  if(!r.distribution) return _fail('dataset: ' + name + ' has no distribution');
+  
+  var s; //the stream that will be returned
 
   //first get a raw stream of the resource
   var isRemote = false;
   
   //order matters
-  if('data' in r){
-    s =  new Streamifier(r.data);
-    if(!r.format && (typeof r.data !== 'string')){
-      r.format = 'json';
-    }
-  } else if('url' in r){
-    s = new PassThrough(options);
-    isRemote = true;
-  } else if('path' in r){
-    s = fs.createReadStream(path.resolve(this.root, r.path));
-    if(!r.format){
-      r.format = path.extname(r.path).substring(1);
-    }
-  } else if('require' in r){
-    s = new PassThrough(options);
+  if('contentData' in r.distribution){
+    s =  new Streamifier(r.distribution.contentData);
+  } else if('contentPath' in r.distribution){ //local first
+    s = fs.createReadStream(path.resolve(this.root, r.distribution.contentPath));
+    //TODO if no encodingFormat try chance by using contentUrl if it exists
+  } else if('contentUrl' in r.distribution){
+    s = new PassThrough(opts);
     isRemote = true;
   } else {
-    return _fail('could not find "data", "url", "path" or "require"');
+    return _fail('dataset: ' + name + ' could not find "contentData", "contentPath" or "contentUrl" in distribution');
   }
 
-  if(isRemote){
-    //return immediately the empty PassThrough stream that will be fed by data when the request is resolved    
+  if (isRemote){
+    //return immediately the empty PassThrough stream that will be fed by data when the request is resolved
     
     //if not format or schema but a hope that's it's on the registry: try to get format or schema from the registry
-    if( ('require' in r) && ! ('url' in r) && ( !('format' in r) || !('schema' in r) ) ){ 
+    if( !isUrl(r.distribution.contentUrl) ){ 
 
-      this._url(r.require, function(err, rurl){
-        if(err) return s.emit('error', err);
-        request(rurl + '?meta=true', function(err, resp, body){
+      //try to get base
+      if(this.base){
+
+        this._feed(s, r, opts);        
+
+      } else if ('base' in this){ //try to retrieve @context.@base
+        
+        request(this.ctnr['@context'], function(err, resp, body){
           if(err) return s.emit('error', err);
-          if(resp.statusCode === 200){
-            body = JSON.parse(body);
-            if(!('format' in r) && ('format' in body)){
-              r.format = body.format;
-            }
-            if(!('schema' in r) && ('schema' in body)){
-              r.schema = body.schema;
-            }
+          if(resp.statusCode >= 400){
+            s.emit('error', new Error('could not retrieve @context at: ' + this.ctnr['@context'] + '. Server returned error code: '+  resp.statusCode));
+            return;
           }
-          this._feed(s, r, options);
+          
+          try{
+            var ctx = JSON.parse(body);
+          } catch (e){
+            return s.emit('error', e);
+          }
+
+          if ( ctx['@base'] && isUrl(ctx['@base']) ){
+            this.base = ctx['@base'];
+            this._feed(s, r, opts);            
+          } else {
+            s.emit('error', new Error('@context retrieved at: ' + this.ctnr['@context'] + ' does not contain a valid @base'));            
+          }
+          
         }.bind(this));
 
-      }.bind(this));
+      } else {
+
+        s.emit('error', new Error('dataset: ' + name + ' has a relative url and no base could be found'));
+
+      }
 
     } else {
-      this._feed(s, r, options);
+      this._feed(s, r, opts);
     }
 
     return s;
 
-  }else{
+  } else {
 
-    return this._convert(s, r, options);
+    return this._convert(s, r, opts);
 
   }
 };
@@ -135,32 +138,22 @@ Dpkg.prototype.createReadStream = function(name, options){
 /**
  * feed passthrough stream s with remote resource r
  */ 
-Dpkg.prototype._feed = function (s, r, options){
-  var that = this;
+Ctnr.prototype._feed = function (s, r, opts){
 
-  if(r.url){
-    next(r.url);
-  } else {
-    that._url(r.require, function(err, rurl){
-      if(err) return s.emit('error', err);
-      next(rurl);
+  var rurl = (isUrl(r.distribution.contentUrl)) ? r.distribution.contentUrl : url.resolve(this.base, r.distribution.contentUrl);
+
+  request(rurl)
+    .on('response', function(resp){
+      r.distribution.encodingFormat = r.distribution.encodingFormat || resp.headers['content-type']; //last hope to get an encodingFormat
+      if(resp.statusCode >= 400){
+        s.emit('error', new Error(resp.statusCode));
+      } else {
+        this._convert(resp, r, opts).pipe(s);        
+      }
+    }.bind(this))
+    .on('error', function(err){
+      s.emit('error', err);
     });
-  }
-  
-  function next(rurl){
-    request(rurl)
-      .on('response', function(resp){
-        r.format = r.format || mime.extension(resp.headers['content-type']); //last hope to get a format
-        if(resp.statusCode === 200){
-          that._convert(resp, r, options).pipe(s);
-        } else {
-          s.emit('error', new Error(resp.statusCode));          
-        }    
-      })
-      .on('error', function(err){
-        s.emit('error', err);
-      });
-  };
 
 };
 
@@ -168,33 +161,36 @@ Dpkg.prototype._feed = function (s, r, options){
 
 /**
  * convert s, a raw stream (Buffer) according to the format of r and
- * options
+ * opts
  */  
-Dpkg.prototype._convert = function(s, r, options){
+Ctnr.prototype._convert = function(s, r, opts){
 
-  if(!options.objectMode){
+  if(!opts.objectMode){
     return s;
   }
 
-  if(!r.format){
+  var contentType = r.distribution.encodingFormat;
+
+  if(!contentType){
+    //TODO allow force opts to force an encodingFormat 
     process.nextTick(function(){
-      s.emit('error', new Error('no format could be found for ' + r.name));
+      s.emit('error', new Error('no encodingFormat could be found for ' + r.name));
     });
     return s;
   }
-
-  if( (r.format !== 'csv') && (r.format !== 'ldjson') ){
+  
+  if( (contentType !== 'text/csv') && (contentType !== 'application/x-ldjson') ){
     process.nextTick(function(){
-      s.emit('error', new Error('options ' + Object.keys(options).join(',') +' can only be specified for resource of format csv or ldjson, not ' + r.format + ' ( resource: ' + r.name +')'));
+      s.emit('error', new Error('opts ' + Object.keys(opts).join(',') +' can only be specified for resource of format csv or ldjson, not ' + contentType + ' ( resource: ' + r.name +')'));
     });
     return s;    
   }
 
   //Parsing: binary stream -> stream in objectMode
-  if(r.format === 'csv'){
+  if(contentType === 'text/csv'){
     s = s.pipe(binaryCSV({json:true}));
 
-  } else if (r.format === 'ldjson'){ //line delimited JSON
+  } else if (contentType === 'application/x-ldjson'){ //line delimited JSON
     s = s.pipe(split(function(row){
       if(row) {
         return JSON.parse(row);
@@ -203,16 +199,16 @@ Dpkg.prototype._convert = function(s, r, options){
   }
   
   //coercion and transformation  
-  if(r.schema && options.coerce){
-    s = s.pipe(new Validator(r.schema));
+  if(r.about && opts.coerce){
+    s = s.pipe(new Validator(r.about));
   }
 
-  if(r.require && r.require.fields){
-    s = s.pipe(new Filter(r.require.fields, options));
+  if(opts.filter){
+    s = s.pipe(new Filter(opts.filter, opts));
   }
   
-  if(options.ldjsonify){
-    if(r.format !== 'csv'){
+  if(opts.ldjsonify){
+    if(contentType !== 'text/csv'){
       process.nextTick(function(){
         s.emit('error', new Error('ldjsonify can only be used with csv data'))
       });

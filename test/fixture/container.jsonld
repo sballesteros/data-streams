@@ -1,0 +1,47 @@
+{
+  "@context": { "@base": "https://raw.github.com/standard-analytics/data-streams/master/test/fixture/" },
+  "name": "myctnr",
+  "dataset": [
+
+    {
+      "name": "test_inline",
+      "about": [
+        {"name": "a", "valueType": "xsd:string"},
+        {"name": "b", "valueType": "xsd:string"},
+        {"name": "c", "valueType": "xsd:string"}
+      ],
+      "distribution":{
+        "contentData": [
+          {"a": "a", "b": "a", "c": "z"},
+          {"a": "x", "b": "v", "c": "z"},
+          {"a": "y", "b": "v", "c": "z"}
+        ],
+        "encodingFormat": "application/json"
+      }
+    },
+
+    {
+      "name": "test_path",
+      "about": [
+        {"name": "date", "valueType": "xsd:date"},
+        {"name": "a", "valueType": "xsd:double"},
+        {"name": "b", "valueType": "xsd:integer"},
+        {"name": "c", "valueType": "xsd:integer"},
+        {"name": "d", "valueType": "xsd:integer"}
+      ],
+      "distribution": {
+        "contentPath": "data/data.csv",
+        "encodingFormat": "text/csv"
+      }      
+    },
+
+    {
+      "name": "test_url",
+      "distribution": {
+        "contentUrl": "test.csv",
+        "encodingFormat": "text/csv"
+      }
+    }
+
+  ]
+}
