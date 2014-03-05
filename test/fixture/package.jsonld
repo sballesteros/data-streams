@@ -1,6 +1,6 @@
 {
   "@context": { "@base": "https://raw.github.com/standard-analytics/data-streams/master/test/fixture/" },
-  "name": "myctnr",
+  "name": "mypkg",
   "dataset": [
 
     {

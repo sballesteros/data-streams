@@ -16,29 +16,29 @@ var fs = require('fs')
   , url = require('url')
   , split = require('split');
 
-exports.Ctnr = Ctnr;
-exports.CtnrSync = CtnrSync;
+exports.Pkg = Pkg;
+exports.PkgSync = PkgSync;
 
-function CtnrSync(root, opts){  
-  var ctnr = JSON.parse(fs.readFileSync(path.resolve(root, 'container.jsonld')));
+function PkgSync(root, opts){  
+  var pkg = JSON.parse(fs.readFileSync(path.resolve(root, 'package.jsonld')));
 
-  Ctnr.call(this, ctnr, root, opts);  
+  Pkg.call(this, pkg, root, opts);  
 };
-util.inherits(CtnrSync, Ctnr);
+util.inherits(PkgSync, Pkg);
 
 
-function Ctnr(ctnr, root, opts){
+function Pkg(pkg, root, opts){
   opts = opts || {};
   
-  this.ctnr = ctnr;
+  this.pkg = pkg;
   this.root = (root) ? path.resolve(root): process.cwd();
 
   //if !base in this -> will throw if based is needed. if this.based === undefined try to get a base by dereferencing context url
-  if(ctnr['@context']){
-    if(isUrl(ctnr['@context'])){
+  if(pkg['@context']){
+    if(isUrl(pkg['@context'])){
       this.base = undefined; //will be resolved at first request if needed...
-    } else if ( (typeof ctnr['@context'] === 'object') && ('@base' in ctnr['@context']) && isUrl(ctnr['@context']['@base']) ) {
-      this.base = ctnr['@context']['@base'];
+    } else if ( (typeof pkg['@context'] === 'object') && ('@base' in pkg['@context']) && isUrl(pkg['@context']['@base']) ) {
+      this.base = pkg['@context']['@base'];
     }
   } else if(opts.base && isUrl(opts.base)) {
     this.base = opts.base;
@@ -47,12 +47,12 @@ function Ctnr(ctnr, root, opts){
 };
 
 
-Ctnr.prototype.get = function(name){
-  return clone(this.ctnr.dataset.filter(function(x){return x.name === name})[0]);
+Pkg.prototype.get = function(name){
+  return clone(this.pkg.dataset.filter(function(x){return x.name === name})[0]);
 };
 
 
-Ctnr.prototype.createReadStream = function(name, opts){
+Pkg.prototype.createReadStream = function(name, opts){
   opts = clone(opts) || {};
   if(opts.coerce || opts.ldjsonify){
     opts.objectMode = true;
@@ -93,10 +93,10 @@ Ctnr.prototype.createReadStream = function(name, opts){
 
       } else if ('base' in this){ //try to retrieve @context.@base
         
-        request(this.ctnr['@context'], function(err, resp, body){
+        request(this.pkg['@context'], function(err, resp, body){
           if(err) return s.emit('error', err);
           if(resp.statusCode >= 400){
-            s.emit('error', new Error('could not retrieve @context at: ' + this.ctnr['@context'] + '. Server returned error code: '+  resp.statusCode));
+            s.emit('error', new Error('could not retrieve @context at: ' + this.pkg['@context'] + '. Server returned error code: '+  resp.statusCode));
             return;
           }
           
@@ -110,7 +110,7 @@ Ctnr.prototype.createReadStream = function(name, opts){
             this.base = ctx['@base'];
             this._feed(s, r, opts);            
           } else {
-            s.emit('error', new Error('@context retrieved at: ' + this.ctnr['@context'] + ' does not contain a valid @base'));            
+            s.emit('error', new Error('@context retrieved at: ' + this.pkg['@context'] + ' does not contain a valid @base'));            
           }
           
         }.bind(this));
@@ -138,7 +138,7 @@ Ctnr.prototype.createReadStream = function(name, opts){
 /**
  * feed passthrough stream s with remote resource r
  */ 
-Ctnr.prototype._feed = function (s, r, opts){
+Pkg.prototype._feed = function (s, r, opts){
 
   var rurl = (isUrl(r.distribution.contentUrl)) ? r.distribution.contentUrl : url.resolve(this.base, r.distribution.contentUrl);
 
@@ -163,7 +163,7 @@ Ctnr.prototype._feed = function (s, r, opts){
  * convert s, a raw stream (Buffer) according to the format of r and
  * opts
  */  
-Ctnr.prototype._convert = function(s, r, opts){
+Pkg.prototype._convert = function(s, r, opts){
 
   if(!opts.objectMode){
     return s;

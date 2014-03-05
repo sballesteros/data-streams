@@ -1,7 +1,7 @@
 data-streams
 ============
 
-Transforms the resources of a container.jsonld into streams.
+Transforms the [Dataset](http://schema.org/Dataset) resources of a package.jsonld into streams.
 
 [![NPM](https://nodei.co/npm/data-streams.png)](https://nodei.co/npm/data-streams/)
 
@@ -9,11 +9,11 @@ Transforms the resources of a container.jsonld into streams.
 Usage
 =====
 
-    var Ctnr = require('data-streams');
-    var myContainer = require('container.jsonld');
+    var Pkg = require('data-streams');
+    var myPackage = require('package.jsonld');
 
-    var ctnr = new Ctnr(myContainer, '.');
-    var stream = ctnr.createReadStream(name, options);
+    var pkg = new Pkg(myPackage, '.');
+    var stream = pkg.createReadStream(name, options);
 
 
 ```name``` is the name of the [Dataset](http://www.schema.org/Dataset) resource.

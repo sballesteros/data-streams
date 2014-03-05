@@ -1,7 +1,7 @@
 {
   "name": "data-streams",
-  "version": "0.1.1",
-  "description": "Transforms the Dataset resources of a container.jsonld into streams",
+  "version": "0.2.0",
+  "description": "Transforms the Dataset resources of a package.jsonld into streams",
   "main": "index.js",
   "scripts": {
     "test": "make test"
@@ -13,7 +13,7 @@
   "keywords": [
     "data",
     "package",
-    "container.jsonld",
+    "package.jsonld",
     "hyperdata",
     "stream"
   ],

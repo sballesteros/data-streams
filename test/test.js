@@ -1,4 +1,4 @@
-var Ctnr = require('../').Ctnr
+var Pkg = require('../').Pkg
   , fs = require('fs')
   , path = require('path')
   , assert = require('assert');
@@ -7,14 +7,14 @@ describe('streams', function(){
 
   var root = path.resolve(__dirname, 'fixture'); 
 
-  var ctnr;
+  var pkg;
   beforeEach(function(){
-    var data = JSON.parse(fs.readFileSync(path.resolve(root, 'container.jsonld')));
-    ctnr = new Ctnr(data, root);   
+    var data = JSON.parse(fs.readFileSync(path.resolve(root, 'package.jsonld')));
+    pkg = new Pkg(data, root);   
   });
 
   it('should return a vanilla stream of a resource with a "contentData" property', function(done){
-    var s = ctnr.createReadStream('test_inline');
+    var s = pkg.createReadStream('test_inline');
     s.on('error', function(err){ throw err; });
     s.on('data', function(data){
       var expected = [
@@ -28,7 +28,7 @@ describe('streams', function(){
   });
 
   it('should return a vanilla stream of a resource with a "contentPath" property', function(done){
-    var s = ctnr.createReadStream('test_path');
+    var s = pkg.createReadStream('test_path');
     var data = [];
     s.on('error', function(err){ throw err; });
     s.on('data', function(chunk){
@@ -45,7 +45,7 @@ describe('streams', function(){
 
   it('should return a vanilla stream of a resource with a "contentUrl" property (as Buffer)', function(done){
     var body = [];
-    var s = ctnr.createReadStream('test_url');
+    var s = pkg.createReadStream('test_url');
     s.on('error', function(err){ throw err; });
     s.on('data', function(chunk){
       body.push(chunk);
@@ -68,7 +68,7 @@ describe('streams', function(){
       {date: '2012-10-04', a: '3076.5', b: 'null', c: '4783', d: '148'}
     ];
 
-    var s = ctnr.createReadStream('test_path', {objectMode:true});
+    var s = pkg.createReadStream('test_path', {objectMode:true});
     s.on('error', function(err){ throw err; });
 
     var counter = 0;
@@ -94,7 +94,7 @@ describe('streams', function(){
       {date: isoify('2012-10-04'), a: 3076.5, b: null, c: 4783, d: 148}
     ];
 
-    var s = ctnr.createReadStream('test_path', {coerce:true});
+    var s = pkg.createReadStream('test_path', {coerce:true});
     s.on('error', function(err){ throw err; });
 
     var counter = 0;
@@ -118,7 +118,7 @@ describe('streams', function(){
       {a: 3076.5, c: 4783 }
     ];
 
-    var s = ctnr.createReadStream('test_path', {coerce:true, filter:['a', 'c']});
+    var s = pkg.createReadStream('test_path', {coerce:true, filter:['a', 'c']});
     s.on('error', function(err){ throw err; });
 
     var counter = 0;
@@ -143,7 +143,7 @@ describe('streams', function(){
       {date: '2012-10-04', a: '3076.5', b: 'null', c: '4783', d: '148'}
     ].map(function(x){return new Buffer(JSON.stringify(x) + '\n');});;
 
-    var s = ctnr.createReadStream('test_path', {ldjsonify:true});
+    var s = pkg.createReadStream('test_path', {ldjsonify:true});
     s.on('error', function(err){ throw err; });
     var counter = 0;
     s.on('data', function(data){ 
